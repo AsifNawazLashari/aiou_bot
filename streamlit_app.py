@@ -3,77 +3,138 @@ import os
 import time
 import shutil
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.core.os_manager import ChromeType
 
 # ==============================================================================
-#  UI CONFIGURATION
+#  1. MOBILE-FIRST UI DESIGN
 # ==============================================================================
-st.set_page_config(page_title="AI 1.0 Ultimate", layout="centered", page_icon="🚀")
+st.set_page_config(page_title="AI 1.0", layout="centered", page_icon="📱")
 
+# CSS: AMOLED Dark Mode, Big Buttons, Modern Inputs
 st.markdown("""
     <style>
-    .stApp { background: #0f1116; color: white; }
-    h1 { color: #00d4ff; text-align: center; font-family: 'Helvetica'; }
-    .stButton>button {
-        background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
-        color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; width: 100%;
+    /* Main Background - Deep Black for OLED */
+    .stApp { background-color: #000000; color: white; }
+    
+    /* Hide Header/Footer */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Modern Title */
+    h1 {
+        background: -webkit-linear-gradient(45deg, #00d4ff, #005bea);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        font-weight: 800;
+        font-family: 'Helvetica Neue', sans-serif;
+        margin-bottom: 30px;
     }
-    .status-box { background: #1a1c24; padding: 15px; border-radius: 10px; border: 1px solid #333; font-family: monospace; height: 300px; overflow-y: scroll; }
+
+    /* Input Fields styling */
+    div[data-baseweb="input"] {
+        background-color: #1a1a1a !important;
+        border: 1px solid #333 !important;
+        border-radius: 12px !important;
+        color: white !important;
+    }
+    
+    /* The Big Action Button */
+    div.stButton > button {
+        background: linear-gradient(90deg, #00d4ff 0%, #005bea 100%);
+        color: white;
+        border: none;
+        padding: 15px 0;
+        border-radius: 50px;
+        font-size: 18px;
+        font-weight: bold;
+        width: 100%;
+        box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4);
+        transition: transform 0.2s;
+    }
+    div.stButton > button:active { transform: scale(0.96); }
+
+    /* Glass Logs Container */
+    .log-container {
+        margin-top: 20px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 15px;
+        height: 250px;
+        overflow-y: scroll;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+    }
+
+    /* File Uploader styling */
+    div[data-testid="stFileUploader"] {
+        background-color: #111;
+        border-radius: 15px;
+        padding: 10px;
+        border: 1px dashed #444;
+    }
+    
+    .status-line { margin-bottom: 5px; border-bottom: 1px solid #222; padding-bottom: 2px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-#  AUTOMATION ENGINE
+#  2. ROBUST CLOUD ENGINE
 # ==============================================================================
 def get_driver():
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")
+    options = Options()
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
     
-    # Cloud-Specific Installer
-    return webdriver.Chrome(
-        service=Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()),
-        options=options
-    )
+    # CRITICAL FIX FOR ERROR 127 ON CLOUD
+    # We point directly to the installed system chromium
+    options.binary_location = "/usr/bin/chromium"
+    
+    service = Service("/usr/bin/chromedriver")
+    return webdriver.Chrome(service=service, options=options)
 
 def run_automation(uid, pwd, uploaded_files):
-    log_container = st.empty()
+    log_ph = st.empty()
     logs = []
 
-    def log(msg, color="white"):
-        logs.append(f"<div style='color:{color}'>[{time.strftime('%H:%M:%S')}] {msg}</div>")
-        log_container.markdown(f"<div class='status-box'>{''.join(logs)}</div>", unsafe_allow_html=True)
+    def log(msg, color="#ffffff"):
+        ts = time.strftime('%H:%M:%S')
+        logs.insert(0, f"<div class='status-line' style='color:{color}'><b>[{ts}]</b> {msg}</div>")
+        log_ph.markdown(f"<div class='log-container'>{''.join(logs)}</div>", unsafe_allow_html=True)
 
     def force_click(driver, element):
-        driver.execute_script("arguments[0].scrollIntoView(true);arguments[0].click();", element)
+        driver.execute_script("arguments[0].scrollIntoView(true);", element)
+        time.sleep(0.5)
+        driver.execute_script("arguments[0].click();", element)
 
-    # 1. Save Files Temporarily
-    temp_dir = "temp_assignments"
+    # 1. Handle Files
+    temp_dir = "temp_data"
     if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
     os.makedirs(temp_dir)
     
     for f in uploaded_files:
-        with open(os.path.join(temp_dir, f.name), "wb") as w:
-            w.write(f.getbuffer())
+        with open(os.path.join(temp_dir, f.name), "wb") as w: w.write(f.getbuffer())
 
+    driver = None
     try:
-        log(">>> STARTING CLOUD ENGINE...", "#00d4ff")
+        log("🚀 INITIALIZING CLOUD ENGINE...", "#00d4ff")
         driver = get_driver()
         wait = WebDriverWait(driver, 30)
         
-        log(">>> CONNECTING TO AIOU...", "yellow")
+        log("🌐 CONNECTING TO LMS...", "#aaaaaa")
         driver.get("https://lms3.aiou.edu.pk/my/courses.php")
         
-        # Login
+        # LOGIN
         if "microsoftonline" in driver.current_url:
-            log(">>> AUTHENTICATING...", "orange")
+            log("🔐 AUTHENTICATING...", "#ffcc00")
             wait.until(EC.visibility_of_element_located((By.NAME, "loginfmt"))).send_keys(uid)
             wait.until(EC.element_to_be_clickable((By.ID, "idSIButton9"))).click(); time.sleep(2)
             pf = wait.until(EC.visibility_of_element_located((By.NAME, "passwd")))
@@ -82,15 +143,16 @@ def run_automation(uid, pwd, uploaded_files):
             try: wait.until(EC.element_to_be_clickable((By.ID, "idSIButton9"))).click()
             except: pass
 
-        log(">>> ACCESS GRANTED", "#00ff9d")
+        log("✅ ACCESS GRANTED", "#00ff9d")
         wait.until(EC.presence_of_element_located((By.CLASS_NAME, "coursename")))
 
-        # Mapping
+        # MAPPING
         links = driver.find_elements(By.CSS_SELECTOR, "a.aalink.coursename")
         amap = {}; tasks = []
+        
         for l in links:
             t = l.get_attribute('innerText').strip()
-            if "|" in t: 
+            if "|" in t:
                 p = t.split("|")
                 if len(p)>=3: amap[''.join(e for e in p[2].upper() if e.isalnum())] = p[0].strip().split()[-1]
         
@@ -105,10 +167,10 @@ def run_automation(uid, pwd, uploaded_files):
                         if ct in k: mc=v; break
                 if mc: tasks.append((mc, url))
 
-        log(f">>> {len(tasks)} COURSES DETECTED", "#00d4ff")
+        log(f"📋 {len(tasks)} COURSES DETECTED", "#00d4ff")
 
+        # PROCESSING
         for code, url in tasks:
-            log(f"--- CHECKING {code} ---")
             driver.get(url)
             alist = []
             fl = driver.find_elements(By.PARTIAL_LINK_TEXT, "ASSIGNMENT")
@@ -121,17 +183,15 @@ def run_automation(uid, pwd, uploaded_files):
                 fname = f"{code}_{num}.pdf"
                 fpath = os.path.join(temp_dir, fname)
                 
-                if not os.path.exists(fpath):
-                    log(f"Skipping {fname} (Not uploaded)", "grey")
-                    continue
+                if not os.path.exists(fpath): continue
                 
                 driver.get(aurl)
                 if "Submitted for grading" in driver.find_element(By.TAG_NAME, "body").text:
-                    log(f"{fname}: Already Done", "#00ff9d")
+                    log(f"✔ {fname} Already Done", "#555")
                     continue
-
+                
                 try:
-                    log(f"Uploading {fname}...", "yellow")
+                    log(f"📤 Uploading {fname}...", "#ffcc00")
                     try:
                         btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Add submission') or contains(text(), 'Edit submission')]")))
                         force_click(driver, btn)
@@ -157,49 +217,47 @@ def run_automation(uid, pwd, uploaded_files):
                             force_click(driver, sbtn[0]); time.sleep(3)
                             force_click(driver, wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[value='Continue']"))))
                     except: pass
-                    
+
                     try:
                         cl = driver.find_elements(By.LINK_TEXT, "Continue")
                         if cl: force_click(driver, cl[0])
                     except: pass
 
-                    log(f"SUCCESS: {fname}", "#00ff9d")
-                except Exception as e: log(f"Err: {e}", "red")
+                    log(f"✨ SUCCESS: {fname}", "#00ff9d")
+                except Exception as e: log(f"❌ Error: {e}", "#ff4b4b")
 
-    except Exception as e: log(f"System Error: {e}", "red")
+    except Exception as e: log(f"CRITICAL: {e}", "red")
     finally:
-        if 'driver' in locals(): driver.quit()
-        # Cleanup files
-        shutil.rmtree(temp_dir)
-        log("JOB COMPLETE", "white")
+        if driver: driver.quit()
+        if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
+        log("🏁 PROCESS FINISHED", "white")
 
 # ==============================================================================
-#  MAIN APP
+#  3. MAIN APP FLOW
 # ==============================================================================
 st.markdown("<h1>AI 1.0 ULTIMATE</h1>", unsafe_allow_html=True)
 
 if "auth" not in st.session_state: st.session_state["auth"] = False
 
 if not st.session_state["auth"]:
-    code = st.text_input("Enter Access Code", type="password")
-    if st.button("UNLOCK"):
+    st.markdown("<br>", unsafe_allow_html=True)
+    code = st.text_input("ACCESS CODE", type="password", label_visibility="collapsed", placeholder="Enter Code")
+    if st.button("UNLOCK SYSTEM"):
         if code == "Aksji2014": st.session_state["auth"] = True; st.rerun()
-        else: st.error("Access Denied")
+        else: st.error("ACCESS DENIED")
 else:
-    # 1. Credentials
-    c1, c2 = st.columns(2)
-    with c1: uid = st.text_input("User ID")
-    with c2: pwd = st.text_input("Password", type="password")
-
-    # 2. File Uploader
-    st.info("Select your PDF assignments. They will be uploaded securely.")
-    files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
-
-    # 3. Start
-    if st.button("START AUTO-UPLOAD"):
+    uid = st.text_input("User ID", placeholder="User ID")
+    pwd = st.text_input("Password", type="password", placeholder="Password")
+    
+    st.markdown("<br><b>Select Assignment PDFs</b>", unsafe_allow_html=True)
+    files = st.file_uploader("Drop files here", type="pdf", accept_multiple_files=True, label_visibility="collapsed")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.button("START AUTOMATION"):
         if uid and pwd and files:
             run_automation(uid, pwd, files)
         else:
-            st.error("Please provide Credentials and Files.")
+            st.warning("Please provide Credentials and Files")
 
-st.markdown("<div class='footer'>Cloud Software by Asif Lashari | 2026</div>", unsafe_allow_html=True)
+    st.markdown("<br><div style='text-align:center; color:#333; font-size:10px;'>Asif Lashari | 2026</div>", unsafe_allow_html=True)
